@@ -152,7 +152,7 @@ dsh plugin add dsh-requirement-copilot
 - [x] 构建脚本、镜像脚本与 staging 目录
 - [x] `npm pack` tarball（10 files，约 60 KB）
 - [x] 上架文案（`docs/MARKETPLACE_LISTING.md`）
-- [x] GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot`（public，`dsh-plugin` topic 已加，v1.6.1 已镜像）
+- [x] GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot`（public，`dsh-plugin` topic 已加，v1.8.0 已镜像）
 - [x] npm 发布：`dsh-requirement-copilot@1.6.1`（https://www.npmjs.com/package/dsh-requirement-copilot）
 - [ ] npm 发布 `1.8.0`（已构建 tarball；Host 后台任务 + 跨会话/刷新恢复）
 - [ ] dshbase issue 提交（自动提交返回 403：token 无第三方仓库 issue 写权限；可复制 `docs/DSHBASE_SUBMISSION.md` 手动提交）
