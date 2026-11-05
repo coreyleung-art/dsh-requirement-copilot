@@ -56,6 +56,7 @@ function createHarness(options = {}) {
     : {
         async *stream(request) {
           calls.push(request)
+          if (options.delayMs !== undefined) await new Promise((resolve) => setTimeout(resolve, options.delayMs))
           const spec = responses[Math.min(calls.length - 1, responses.length - 1)] ?? { text: '' }
           if (spec.throw !== undefined) throw spec.throw
           if (typeof spec.text === 'string' && spec.text !== '') {
@@ -112,13 +113,26 @@ async function callTool(harness, args) {
 }
 
 async function callCommand(harness, payload) {
-  const command = harness.commandDefs.find((definition) => definition.name === 'refine-prompt')
-  assert.ok(command, 'refine-prompt command should be registered')
+  return callNamedCommand(harness, 'refine-prompt', payload)
+}
+
+async function callNamedCommand(harness, name, payload) {
+  const command = harness.commandDefs.find((definition) => definition.name === name)
+  assert.ok(command, name + ' command should be registered')
   const execution = await command.handler({
     rawInput: JSON.stringify(payload),
     signal: new AbortController().signal
   })
   return { command, execution, body: JSON.parse(execution.text) }
+}
+
+async function waitForStatus(harness, jobId, expected) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const { body } = await callNamedCommand(harness, 'refine-prompt-status', { jobId })
+    if (body.ok === true && body.data.status === expected) return body.data
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  assert.fail('job did not reach status ' + expected)
 }
 
 async function assertRejectsCode(promise, code) {
@@ -128,12 +142,20 @@ async function assertRejectsCode(promise, code) {
   })
 }
 
-test('host: registers one command, one tool and one embedded skill', () => {
+test('host: registers one sync command, three background commands, one tool and one skill', () => {
   const harness = createHarness()
-  assert.equal(harness.commandDefs.length, 1)
-  assert.equal(harness.commandDefs[0].name, 'refine-prompt')
-  assert.equal(harness.commandDefs[0].recordInput, false)
-  assert.match(harness.commandDefs[0].description, /帮我说/)
+  assert.equal(harness.commandDefs.length, 4)
+  const main = harness.commandDefs.find((definition) => definition.name === 'refine-prompt')
+  assert.ok(main)
+  assert.equal(main.recordInput, false)
+  assert.match(main.description, /帮我说/)
+  assert.deepEqual(harness.commandDefs.map((definition) => definition.name).sort(), [
+    'refine-prompt',
+    'refine-prompt-cancel',
+    'refine-prompt-start',
+    'refine-prompt-status',
+  ])
+  for (const definition of harness.commandDefs) assert.equal(definition.recordInput, false)
   assert.equal(harness.toolDefs.length, 1)
   assert.equal(harness.toolDefs[0].name, 'refine_requirement')
   assert.equal(harness.skillDefs.length, 1)
@@ -141,6 +163,42 @@ test('host: registers one command, one tool and one embedded skill', () => {
   assert.deepEqual(harness.skillDefs[0].invocation, { modelInvocable: true, userInvocable: false })
   assert.match(harness.skillDefs[0].content, /帮我说/)
   assert.deepEqual(inject, ['commands', 'tools'])
+})
+
+test('host: background job starts immediately, runs, and returns its result from status', async () => {
+  const harness = createHarness({ responses: [{ text: JSON.stringify(validPayload()) }] })
+  const started = await callNamedCommand(harness, 'refine-prompt-start', {
+    rough: '给设置页加深色模式开关',
+    ownerSessionId: 'session-a',
+  })
+  assert.equal(started.body.ok, true)
+  assert.equal(started.body.data.status, 'running')
+  assert.match(started.body.data.jobId, /^[0-9a-f-]{36}$/)
+
+  const finished = await waitForStatus(harness, started.body.data.jobId, 'succeeded')
+  assert.equal(finished.result.analysis.intent, '开发功能')
+  assert.equal(harness.calls.length, 1)
+})
+
+test('host: background enforces one running job per session and exposes cancel', async () => {
+  const harness = createHarness({ delayMs: 25, responses: [{ text: JSON.stringify(validPayload()) }] })
+  const first = await callNamedCommand(harness, 'refine-prompt-start', {
+    rough: '给设置页加深色模式开关',
+    ownerSessionId: 'session-a',
+  })
+  const second = await callNamedCommand(harness, 'refine-prompt-start', {
+    rough: '再生成一次',
+    ownerSessionId: 'session-a',
+  })
+  assert.equal(second.body.ok, false)
+  assert.equal(second.body.code, 'E_BUSY')
+
+  const cancelled = await callNamedCommand(harness, 'refine-prompt-cancel', { jobId: first.body.data.jobId })
+  assert.equal(cancelled.body.ok, true)
+  assert.equal(cancelled.body.data.status, 'cancelled')
+  const missing = await callNamedCommand(harness, 'refine-prompt-status', { jobId: '00000000-0000-0000-0000-000000000000' })
+  assert.equal(missing.body.ok, false)
+  assert.equal(missing.body.code, 'E_JOB_NOT_FOUND')
 })
 
 test('host: assembles the agent prompt deterministically and ignores model markdown', async () => {

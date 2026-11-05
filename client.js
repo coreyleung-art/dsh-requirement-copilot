@@ -29,6 +29,10 @@ window.__ModuleLoader__.load({
 
     const NS = 'reqcopilot'
     const COMMAND_NAME = 'refine-prompt'
+    const BACKGROUND_START_COMMAND = 'refine-prompt-start'
+    const BACKGROUND_STATUS_COMMAND = 'refine-prompt-status'
+    const BACKGROUND_CANCEL_COMMAND = 'refine-prompt-cancel'
+    const JOB_KEY_PREFIX = 'rcp-job:'
     const MAX_INPUT_CHARS = 8000
 
     /**
@@ -102,6 +106,59 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // ------------------------------------------------------- background jobs
+
+    function jobKeyFor(sessionId) {
+      const key = typeof sessionId === 'string' && sessionId !== '' ? sessionId : 'default'
+      return JOB_KEY_PREFIX + key
+    }
+
+    function readJobRecord(sessionId) {
+      try {
+        if (typeof window === 'undefined' || window.localStorage === undefined) return null
+        const raw = window.localStorage.getItem(jobKeyFor(sessionId))
+        if (raw === null) return null
+        const parsed = JSON.parse(raw)
+        if (parsed === null || typeof parsed !== 'object' || typeof parsed.jobId !== 'string' || parsed.jobId === '') return null
+        return parsed
+      } catch {
+        return null
+      }
+    }
+
+    function writeJobRecord(sessionId, record) {
+      try {
+        if (typeof window === 'undefined' || window.localStorage === undefined) return
+        window.localStorage.setItem(jobKeyFor(sessionId), JSON.stringify(record).slice(0, 8000))
+      } catch {
+        // Job persistence is best-effort.
+      }
+    }
+
+    function clearJobRecord(sessionId) {
+      try {
+        if (typeof window === 'undefined' || window.localStorage === undefined) return
+        window.localStorage.removeItem(jobKeyFor(sessionId))
+      } catch {
+        // ignore
+      }
+    }
+
+    function commandEnvelope(execution) {
+      if (execution === undefined || execution === null || execution.result === undefined || execution.result === null) return null
+      if (execution.result.kind !== 'success' || typeof execution.result.text !== 'string') return null
+      try {
+        const value = JSON.parse(execution.result.text)
+        return value !== null && typeof value === 'object' ? value : null
+      } catch {
+        return null
+      }
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms))
+    }
+
     // ---------------------------------------------------------------- locale
 
     const ZH = {
@@ -163,6 +220,8 @@ window.__ModuleLoader__.load({
       'status.restored': '已恢复原草稿',
       'status.draftChanged': '已生成；输入框内容已变化，未自动覆盖',
       'status.alreadyInserted': '输入框中已经是这段内容',
+      'status.busy': '后台已有 2 个生成任务，请稍候再试。',
+      'status.backgroundReady': '生成完成；会话已切换，结果已保留，未自动写回。',
       'gate.title': '开工前确认',
       'gate.subtitle': '一次只问一题。点选候选答案，或补充说明；也可以跳过。',
       'gate.choices': '候选答案',
@@ -282,6 +341,8 @@ window.__ModuleLoader__.load({
       'status.restored': 'Original draft restored',
       'status.draftChanged': 'Generated, but the composer changed, so it was not overwritten',
       'status.alreadyInserted': 'The composer already contains this text',
+      'status.busy': 'Two background generations are already running; try again shortly.',
+      'status.backgroundReady': 'Generation finished after you switched sessions; the result was kept and not written back automatically.',
       'gate.title': 'Confirm before you start',
       'gate.subtitle': 'One question at a time. Pick a suggested answer, add a note, or skip.',
       'gate.choices': 'Suggestions',
@@ -346,11 +407,12 @@ window.__ModuleLoader__.load({
 
     const CSS = [
       '.rcp-root{width:100%;font-family:inherit}',
-      '.rcp-trigger{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;padding:0;border:.5px solid transparent;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}',
+      '.rcp-trigger{position:relative;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;padding:0;border:.5px solid transparent;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}',
       '.rcp-trigger:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}',
       '.rcp-trigger[data-open="true"]{color:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}',
       '.rcp-trigger:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
       '.rcp-trigger svg{display:block;flex:none}',
+    '.rcp-trigger-dot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px var(--dsw-alias-bg-layer-1)}',
       '.rcp-popover{position:absolute;right:0;bottom:8px;z-index:30;width:min(620px,calc(100vw - 32px));box-sizing:border-box}',
       '.rcp-popover[hidden]{display:none}',
       '.rcp-panel{display:flex;flex-direction:column;gap:10px;padding:12px 14px 13px;border:.5px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);max-height:min(560px,58vh);overflow:auto;box-sizing:border-box}',
@@ -847,18 +909,71 @@ window.__ModuleLoader__.load({
      */
     const sessionStores = new Map()
 
+    /** Per-session generation state, kept alive across session switches. */
+    const generationCache = new Map()
+    const generationControllers = new Map()
+    const MAX_ACTIVE_GENERATIONS = 2
+    let activeGenerations = 0
+
+    function defaultGenerationState() {
+      return {
+        status: 'idle',
+        result: null,
+        error: '',
+        notice: '',
+        noticeKind: 'info',
+        pendingApply: null,
+        restoreDraft: null,
+        rough: '',
+        mode: 'agent',
+        detail: 'standard',
+        language: 'auto',
+        target: 'generic',
+        scenario: 'general',
+        unseen: false,
+        startedAt: 0,
+      }
+    }
+
+    function generationFor(sessionId) {
+      const key = typeof sessionId === 'string' ? sessionId : ''
+      let state = generationCache.get(key)
+      if (state === undefined) {
+        state = defaultGenerationState()
+        generationCache.set(key, state)
+      }
+      return state
+    }
+
     function storeFor(sessionId) {
       const key = typeof sessionId === 'string' ? sessionId : ''
       let store = sessionStores.get(key)
       if (store === undefined) {
-        store = { open: false, seq: 0, text: '', appliedText: '', listeners: new Set() }
+        store = { key, open: false, seq: 0, text: '', appliedText: '', listeners: new Set() }
         sessionStores.set(key, store)
       }
       return store
     }
 
     function snapshotOf(store) {
-      return { open: store.open, seq: store.seq, text: store.text, appliedText: store.appliedText }
+      return {
+        open: store.open,
+        seq: store.seq,
+        text: store.text,
+        appliedText: store.appliedText,
+        gen: generationFor(store.key),
+      }
+    }
+
+    function notifySession(sessionId) {
+      const store = storeFor(sessionId)
+      for (const listener of [...store.listeners]) {
+        try {
+          listener()
+        } catch {
+          // A broken listener must not block the others.
+        }
+      }
     }
 
     function useSessionStore(sessionId) {
@@ -985,52 +1100,79 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         setHistory(readHistory(sessionId))
       }, [sessionId])
-      const abortRef = React.useRef(null)
       const textareaRef = React.useRef(null)
       const popoverRef = React.useRef(null)
       const dragRef = React.useRef(null)
       const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 })
-      const handledSeqRef = React.useRef(0)
+      const handledSeqRef = React.useRef({})
       const lastDraftRef = React.useRef(typeof draft === 'string' ? draft : '')
       // Latest composer draft for async completion checks (render closures go stale).
       const draftRef = React.useRef(typeof draft === 'string' ? draft : '')
       draftRef.current = typeof draft === 'string' ? draft : ''
+      const currentSessionRef = React.useRef(sessionId)
+      const previousSessionRef = React.useRef(sessionId)
+      const mountedRef = React.useRef(true)
+      currentSessionRef.current = sessionId
 
-      React.useEffect(() => () => {
-        if (abortRef.current !== null) {
-          try {
-            abortRef.current.abort()
-          } catch {
-            // ignore
-          }
-          abortRef.current = null
+      React.useEffect(() => {
+        mountedRef.current = true
+        return () => {
+          mountedRef.current = false
         }
       }, [])
 
+      // Session switches must not cancel a running generation. Keep the previous
+      // session's state in the module cache, then hydrate the newly visible one.
       React.useEffect(() => {
-        if (abortRef.current !== null) {
-          try {
-            abortRef.current.abort()
-          } catch {
-            // ignore
+        const previous = previousSessionRef.current
+        if (previous !== sessionId) {
+          const previousState = generationFor(previous)
+          // A request may have completed while the user was switching; do not
+          // overwrite that terminal state with the stale render snapshot.
+          if (previousState.status !== 'ready' && previousState.status !== 'error') {
+            Object.assign(previousState, {
+              status,
+              result,
+              error,
+              notice,
+              noticeKind,
+              pendingApply,
+              restoreDraft,
+              rough,
+              mode,
+              detail,
+              language,
+              target,
+              scenario,
+            })
           }
-          abortRef.current = null
         }
-        setResult(null)
-        setStatus('idle')
-        setError('')
-        setNotice('')
+        const cached = generationFor(sessionId)
+        setRough(cached.rough)
+        setMode(cached.mode)
+        setDetail(cached.detail)
+        setLanguage(cached.language)
+        setTarget(cached.target)
+        setScenario(cached.scenario)
+        setStatus(cached.status)
+        setResult(cached.result)
+        setError(cached.error)
+        setNotice(cached.notice)
+        setNoticeKind(cached.noticeKind)
+        setPendingApply(cached.pendingApply)
+        setRestoreDraft(cached.restoreDraft)
+        setTab('analysis')
         setConfirmReplace(false)
-        setRestoreDraft(null)
         setClarifyAnswers({})
         setClarifySelections({})
         setGateIndex(0)
         setClarifyDismissed(false)
-        setPendingApply(null)
         setRevisionOpen(false)
         setRevisionNote('')
         setRevisionDepth(0)
         setDiffTarget(null)
+        lastDraftRef.current = typeof draft === 'string' ? draft : ''
+        previousSessionRef.current = sessionId
       }, [sessionId])
 
       React.useEffect(() => {
@@ -1038,6 +1180,16 @@ window.__ModuleLoader__.load({
         const timer = setTimeout(() => setCopyState('idle'), 1800)
         return () => clearTimeout(timer)
       }, [copyState])
+
+      // Opening the popover clears the background-result dot.
+      React.useEffect(() => {
+        if (!open) return
+        const cached = generationFor(sessionId)
+        if (cached.unseen === true) {
+          cached.unseen = false
+          notifySession(sessionId)
+        }
+      }, [open, sessionId])
 
       // Opening the popover seeds an empty editor from the composer draft once.
       React.useEffect(() => {
@@ -1052,14 +1204,15 @@ window.__ModuleLoader__.load({
       // number, so the panel generates immediately when the request arrives.
       React.useEffect(() => {
         if (sessionState.seq === 0) return
-        if (handledSeqRef.current === sessionState.seq) return
-        handledSeqRef.current = sessionState.seq
+        const handled = handledSeqRef.current[sessionId] === undefined ? 0 : handledSeqRef.current[sessionId]
+        if (handled === sessionState.seq) return
+        handledSeqRef.current[sessionId] = sessionState.seq
         const text = typeof sessionState.text === 'string' ? sessionState.text : ''
         if (text.trim() === '') return
         setRough(text)
         void runGenerate(text, { autoApply: true, original: text })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [sessionState.seq])
+      }, [sessionState.seq, sessionId])
 
       // Sending a message (or otherwise clearing the composer) ends the current
       // round: retire the panel's result and source draft so the next round
@@ -1069,14 +1222,23 @@ window.__ModuleLoader__.load({
         const previous = lastDraftRef.current
         lastDraftRef.current = current
         if (previous === '' || current !== '') return
-        if (abortRef.current !== null) {
+        const inflight = generationControllers.get(sessionId)
+        if (inflight !== undefined) {
           try {
-            abortRef.current.abort()
+            inflight.abort()
           } catch {
             // ignore
           }
-          abortRef.current = null
+          generationControllers.delete(sessionId)
         }
+        publishGeneration(sessionId, {
+          status: 'idle',
+          result: null,
+          error: '',
+          notice: '',
+          pendingApply: null,
+          restoreDraft: null,
+        })
         sessionActions.noteApplied('')
         setResult(null)
         setRestoreDraft(null)
@@ -1190,8 +1352,31 @@ window.__ModuleLoader__.load({
         }
       }
 
+      /** Update one session's cached generation state and mirror it into the
+       *  visible component only when that session is still the active one. */
+      const publishGeneration = (owner, patch) => {
+        Object.assign(generationFor(owner), patch)
+        notifySession(owner)
+        if (!mountedRef.current || currentSessionRef.current !== owner) return false
+        if (Object.prototype.hasOwnProperty.call(patch, 'status')) setStatus(patch.status)
+        if (Object.prototype.hasOwnProperty.call(patch, 'result')) setResult(patch.result)
+        if (Object.prototype.hasOwnProperty.call(patch, 'error')) setError(patch.error)
+        if (Object.prototype.hasOwnProperty.call(patch, 'notice')) setNotice(patch.notice)
+        if (Object.prototype.hasOwnProperty.call(patch, 'noticeKind')) setNoticeKind(patch.noticeKind)
+        if (Object.prototype.hasOwnProperty.call(patch, 'pendingApply')) setPendingApply(patch.pendingApply)
+        if (Object.prototype.hasOwnProperty.call(patch, 'restoreDraft')) setRestoreDraft(patch.restoreDraft)
+        return true
+      }
+
       /** Write a finished model result back into the composer, preserving the source text. */
-      const applyRefined = (data, original) => {
+      const applyRefined = (data, original, owner) => {
+        const ownerSession = typeof owner === 'string' ? owner : sessionId
+        if (!mountedRef.current || currentSessionRef.current !== ownerSession) {
+          const cached = generationFor(ownerSession)
+          cached.pendingApply = typeof original === 'string' ? original : ''
+          cached.unseen = true
+          return
+        }
         const meta = data !== null && typeof data === 'object' && data.meta !== null && typeof data.meta === 'object' ? data.meta : {}
         if (meta.source !== 'model') return
         const prompt = typeof data.prompt === 'string' ? data.prompt : ''
@@ -1202,6 +1387,9 @@ window.__ModuleLoader__.load({
         if (source !== '' && current !== source) {
           setNotice(t('status.draftChanged'))
           setNoticeKind('warn')
+          const cached = generationFor(ownerSession)
+          cached.notice = t('status.draftChanged')
+          cached.noticeKind = 'warn'
           return
         }
         try {
@@ -1211,14 +1399,23 @@ window.__ModuleLoader__.load({
           setNoticeKind('ok')
           sessionActions.noteApplied(prompt)
           setOpen(false)
+          const cached = generationFor(ownerSession)
+          cached.notice = t('status.applied')
+          cached.noticeKind = 'ok'
+          cached.restoreDraft = typeof original === 'string' ? original : ''
+          cached.pendingApply = null
         } catch {
           setNotice(t('status.blocked'))
           setNoticeKind('warn')
+          const cached = generationFor(ownerSession)
+          cached.notice = t('status.blocked')
+          cached.noticeKind = 'warn'
         }
       }
 
-      const recordHistory = (data, text) => {
+      const recordHistory = (data, text, owner) => {
         if (data === null || typeof data !== 'object' || typeof data.prompt !== 'string' || data.prompt.trim() === '') return
+        const targetSession = typeof owner === 'string' ? owner : sessionId
         const entry = {
           id: String(Date.now()) + '-' + Math.random().toString(36).slice(2, 7),
           at: new Date().toISOString(),
@@ -1234,12 +1431,11 @@ window.__ModuleLoader__.load({
           target,
           scenario,
         }
-        setHistory((previous) => {
-          if (previous.length > 0 && previous[0].prompt === entry.prompt) return previous
-          const next = [entry, ...previous].slice(0, HISTORY_LIMIT)
-          writeHistory(sessionId, next)
-          return next
-        })
+        const previous = readHistory(targetSession)
+        if (previous.length > 0 && previous[0].prompt === entry.prompt) return
+        const next = [entry, ...previous].slice(0, HISTORY_LIMIT)
+        writeHistory(targetSession, next)
+        if (mountedRef.current && currentSessionRef.current === targetSession) setHistory(next)
       }
 
       const loadHistoryEntry = (entry) => {
@@ -1276,8 +1472,171 @@ window.__ModuleLoader__.load({
         writeHistory(sessionId, [])
       }
 
+      const pollBackgroundJob = async (owner, jobId, signal) => {
+        let first = true
+        while (!signal.aborted) {
+          await sleep(first ? 600 : 1500)
+          first = false
+          if (signal.aborted) break
+          const execution = await executeCommand(
+            owner,
+            '/' + BACKGROUND_STATUS_COMMAND + ' ' + JSON.stringify({ jobId }),
+            signal,
+          )
+          const body = commandEnvelope(execution)
+          if (body === null) throw new Error(t('err.remote'))
+          if (body.ok !== true) {
+            clearJobRecord(owner)
+            throw new Error(typeof body.error === 'string' && body.error !== '' ? body.error : t('err.remote'))
+          }
+          const job = body.data
+          if (job === null || typeof job !== 'object' || typeof job.status !== 'string') throw new Error(t('err.badPayload'))
+          if (job.status === 'running' || job.status === 'queued') continue
+          clearJobRecord(owner)
+          if (job.status === 'succeeded') return job.result
+          if (job.status === 'failed') throw new Error(typeof job.error === 'string' && job.error !== '' ? job.error : t('err.fallback'))
+          if (job.status === 'cancelled') throw new Error(typeof job.error === 'string' && job.error !== '' ? job.error : '生成已取消。')
+          throw new Error(t('err.badPayload'))
+        }
+        const aborted = new Error('生成已取消。')
+        aborted.code = 'E_ABORTED'
+        throw aborted
+      }
+
+      const cancelBackgroundForSession = async (owner) => {
+        const record = readJobRecord(owner)
+        if (record === null) return
+        clearJobRecord(owner)
+        try {
+          await executeCommand(
+            owner,
+            '/' + BACKGROUND_CANCEL_COMMAND + ' ' + JSON.stringify({ jobId: record.jobId }),
+            undefined,
+          )
+        } catch {
+          // The job may already have finished; starting a new one can still work.
+        }
+      }
+
+      const startBackgroundJob = async (owner, request, signal) => {
+        let execution
+        try {
+          execution = await executeCommand(
+            owner,
+            '/' + BACKGROUND_START_COMMAND + ' ' + JSON.stringify(Object.assign({}, request, { ownerSessionId: owner })),
+            signal,
+          )
+        } catch {
+          return null
+        }
+        const body = commandEnvelope(execution)
+        if (body === null) return null
+        if (body.ok !== true) {
+          const code = typeof body.code === 'string' ? body.code : ''
+          if (code === 'E_BUSY' || code === 'E_BAD_PAYLOAD') {
+            throw new Error(typeof body.error === 'string' && body.error !== '' ? body.error : t('err.remote'))
+          }
+          return null
+        }
+        const data = body.data
+        if (data === null || typeof data !== 'object' || typeof data.jobId !== 'string' || data.jobId === '') return null
+        writeJobRecord(owner, {
+          jobId: data.jobId,
+          rough: typeof request.rough === 'string' ? request.rough : '',
+          options: {
+            mode: request.mode,
+            detail: request.detail,
+            language: request.language,
+            target: request.target,
+            scenario: request.scenario,
+          },
+          at: Date.now(),
+        })
+        return pollBackgroundJob(owner, data.jobId, signal)
+      }
+
+      const resumeBackgroundJob = async (owner, record) => {
+        if (generationControllers.has(owner)) return
+        const cached = generationFor(owner)
+        const options = record.options !== null && typeof record.options === 'object' ? record.options : {}
+        const restored = {
+          mode: typeof options.mode === 'string' ? options.mode : cached.mode,
+          detail: typeof options.detail === 'string' ? options.detail : cached.detail,
+          language: typeof options.language === 'string' ? options.language : cached.language,
+          target: typeof options.target === 'string' ? options.target : cached.target,
+          scenario: typeof options.scenario === 'string' ? options.scenario : cached.scenario,
+        }
+        Object.assign(cached, {
+          status: 'generating',
+          result: null,
+          error: '',
+          notice: '',
+          noticeKind: 'info',
+          rough: typeof record.rough === 'string' ? record.rough : cached.rough,
+          pendingApply: null,
+          restoreDraft: null,
+          ...restored,
+        })
+        if (currentSessionRef.current === owner) {
+          setStatus('generating')
+          setResult(null)
+          setError('')
+          setNotice('')
+          if (typeof record.rough === 'string') setRough(record.rough)
+          setMode(restored.mode)
+          setDetail(restored.detail)
+          setLanguage(restored.language)
+          setTarget(restored.target)
+          setScenario(restored.scenario)
+        }
+        const controller = new AbortController()
+        generationControllers.set(owner, controller)
+        activeGenerations += 1
+        try {
+          const result = await pollBackgroundJob(owner, record.jobId, controller.signal)
+          publishGeneration(owner, {
+            status: 'ready',
+            result,
+            error: '',
+            notice: '',
+            noticeKind: 'info',
+            pendingApply: null,
+            unseen: true,
+          })
+          if (result !== null && typeof result === 'object' && result.meta !== null && typeof result.meta === 'object' && result.meta.source === 'model') {
+            recordHistory(result, typeof record.rough === 'string' ? record.rough : '', owner)
+          }
+          if (currentSessionRef.current === owner) setTab('analysis')
+        } catch (failure) {
+          if (controller.signal.aborted) return
+          const message = messageOf(failure)
+          publishGeneration(owner, {
+            status: 'error',
+            result: null,
+            error: message,
+            notice: '',
+            noticeKind: 'warn',
+            pendingApply: null,
+          })
+        } finally {
+          if (generationControllers.get(owner) === controller) generationControllers.delete(owner)
+          activeGenerations = Math.max(0, activeGenerations - 1)
+        }
+      }
+
+      // Recover a Host job after a page reload/session remount.
+      React.useEffect(() => {
+        const record = readJobRecord(sessionId)
+        if (record === null) return
+        if (generationControllers.has(sessionId)) return
+        void resumeBackgroundJob(sessionId, record)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [sessionId])
+
       const runGenerate = async (textOverride, options) => {
         const opts = options === undefined || options === null ? {} : options
+        const owner = sessionId
+        const ownerIsCurrent = () => mountedRef.current && currentSessionRef.current === owner
         const text = typeof textOverride === 'string'
           ? textOverride.trim()
           : typeof rough === 'string' ? rough.trim() : ''
@@ -1289,56 +1648,100 @@ window.__ModuleLoader__.load({
           setError(t('err.tooLong'))
           return
         }
+        const previousController = generationControllers.get(owner)
+        if (previousController === undefined && activeGenerations >= MAX_ACTIVE_GENERATIONS) {
+          setNotice(t('status.busy'))
+          setNoticeKind('warn')
+          return
+        }
+        if (readJobRecord(owner) !== null) await cancelBackgroundForSession(owner)
+        if (previousController !== undefined) {
+          try {
+            previousController.abort()
+          } catch {
+            // ignore
+          }
+        }
         const canCall = executeCommand !== undefined
-          && typeof sessionId === 'string' && sessionId !== ''
+          && typeof owner === 'string' && owner !== ''
         writeDiagnostic({
           stage: 'generate-start',
           hasResolver: executeCommand !== undefined,
-          sessionIdKind: typeof sessionId,
+          sessionIdKind: typeof owner,
           textLength: text.length,
         })
 
         const clarifications = Array.isArray(opts.clarifications) ? opts.clarifications : []
-        if (clarifications.length === 0) setPendingApply(null)
+        if (clarifications.length === 0 && ownerIsCurrent()) setPendingApply(null)
+
+        Object.assign(generationFor(owner), {
+          status: 'generating',
+          result: null,
+          error: '',
+          notice: '',
+          noticeKind: 'info',
+          pendingApply: null,
+          restoreDraft: null,
+          rough: text,
+          mode,
+          detail,
+          language,
+          target,
+          scenario,
+          startedAt: Date.now(),
+          unseen: false,
+        })
 
         // A new generation never inherits the previous result.
-        setResult(null)
-        setRestoreDraft(null)
-        setTab('analysis')
-        setError('')
-        setNotice('')
-        setConfirmReplace(false)
-        setClarifyAnswers({})
-        setClarifyDismissed(false)
-        setRevisionOpen(false)
-        setRevisionNote('')
-        setDiffTarget(null)
-        if (typeof opts.previousPrompt !== 'string' || opts.previousPrompt === '') setRevisionDepth(0)
+        if (ownerIsCurrent()) {
+          setResult(null)
+          setRestoreDraft(null)
+          setTab('analysis')
+          setError('')
+          setNotice('')
+          setConfirmReplace(false)
+          setClarifyAnswers({})
+          setClarifyDismissed(false)
+          setRevisionOpen(false)
+          setRevisionNote('')
+          setDiffTarget(null)
+          if (typeof opts.previousPrompt !== 'string' || opts.previousPrompt === '') setRevisionDepth(0)
+        }
 
         if (!canCall) {
-          writeDiagnostic({ stage: 'no-resolver', hasResolver: executeCommand !== undefined, sessionIdKind: typeof sessionId })
+          writeDiagnostic({ stage: 'no-resolver', hasResolver: executeCommand !== undefined, sessionIdKind: typeof owner })
           const local = buildLocalResult(text, { mode, detail, language, target, scenario })
-          setResult(local)
-          setStatus('ready')
-          setTab('analysis')
-          setPendingApply(null)
-          setError(t('err.fallback') + ' · ' + t('err.remote'))
-          setNoticeKind('warn')
+          publishGeneration(owner, {
+            status: 'ready',
+            result: local,
+            error: t('err.fallback') + ' · ' + t('err.remote'),
+            notice: '',
+            noticeKind: 'warn',
+            pendingApply: null,
+          })
+          if (ownerIsCurrent()) setTab('analysis')
           return
         }
 
         setStatus('generating')
         const controller = new AbortController()
-        abortRef.current = controller
+        generationControllers.set(owner, controller)
+        activeGenerations += 1
+        const request = { rough: text, mode, detail, language, target, scenario }
+        if (clarifications.length > 0) request.clarifications = clarifications
+        if (typeof opts.previousPrompt === 'string' && opts.previousPrompt !== '') {
+          request.previousPrompt = opts.previousPrompt
+          request.revisionNote = typeof opts.revisionNote === 'string' ? opts.revisionNote : ''
+        }
+        const line = '/' + COMMAND_NAME + ' ' + JSON.stringify(request)
         try {
-          const request = { rough: text, mode, detail, language, target, scenario }
-          if (clarifications.length > 0) request.clarifications = clarifications
-          if (typeof opts.previousPrompt === 'string' && opts.previousPrompt !== '') {
-            request.previousPrompt = opts.previousPrompt
-            request.revisionNote = typeof opts.revisionNote === 'string' ? opts.revisionNote : ''
+          let execution
+          const backgroundResult = await startBackgroundJob(owner, request, controller.signal)
+          if (backgroundResult !== null) {
+            execution = { result: { kind: 'success', text: JSON.stringify({ ok: true, data: backgroundResult }) } }
+          } else {
+            execution = await executeCommand(owner, line, controller.signal)
           }
-          const line = '/' + COMMAND_NAME + ' ' + JSON.stringify(request)
-          const execution = await executeCommand(sessionId, line, controller.signal)
           if (execution === undefined || execution === null || execution.result === undefined || execution.result === null) {
             throw new Error(t('err.badPayload'))
           }
@@ -1363,59 +1766,83 @@ window.__ModuleLoader__.load({
             translation: typeof payload.data.translation === 'string',
             source: payload.data.meta !== null && typeof payload.data.meta === 'object' ? payload.data.meta.source : undefined,
           })
-          setResult(payload.data)
-          setStatus('ready')
-          setTab('analysis')
-          if (payload.data.meta !== null && typeof payload.data.meta === 'object' && payload.data.meta.source === 'model') {
-            recordHistory(payload.data, text)
-          }
-          if (typeof opts.previousPrompt === 'string' && opts.previousPrompt !== '') {
-            setRevisionDepth((value) => Math.min(5, value + 1))
-          }
           const dataMeta = payload.data.meta !== null && typeof payload.data.meta === 'object' ? payload.data.meta : {}
           const gaps = payload.data.analysis !== null && typeof payload.data.analysis === 'object'
             && Array.isArray(payload.data.analysis.gaps) ? payload.data.analysis.gaps : []
+          const sourceOriginal = typeof opts.original === 'string' ? opts.original : text
+          let pending = null
+          let deferred = false
+          let applyNow = false
           if (opts.autoApply === true) {
             if (gaps.length > 0 && dataMeta.source === 'model') {
-              // Confirmation gate: do not touch the composer until the user
-              // answers the gaps or explicitly skips them.
-              setPendingApply(typeof opts.original === 'string' ? opts.original : text)
-              setNotice(t('gate.pendingApply'))
-              setNoticeKind('warn')
-            } else {
-              setPendingApply(null)
-              if (gaps.length === 0) applyRefined(payload.data, opts.original)
+              pending = sourceOriginal
+            } else if (gaps.length === 0) {
+              if (ownerIsCurrent()) applyNow = true
+              else {
+                pending = sourceOriginal
+                deferred = true
+              }
+            }
+          }
+          publishGeneration(owner, {
+            status: 'ready',
+            result: payload.data,
+            error: '',
+            notice: deferred ? t('status.backgroundReady') : pending !== null ? t('gate.pendingApply') : '',
+            noticeKind: deferred || pending !== null ? 'warn' : 'info',
+            pendingApply: pending,
+            unseen: !ownerIsCurrent(),
+          })
+          if (applyNow) applyRefined(payload.data, opts.original, owner)
+          if (payload.data.meta !== null && typeof payload.data.meta === 'object' && payload.data.meta.source === 'model') {
+            recordHistory(payload.data, text, owner)
+          }
+          if (ownerIsCurrent()) {
+            setTab('analysis')
+            if (typeof opts.previousPrompt === 'string' && opts.previousPrompt !== '') {
+              setRevisionDepth((value) => Math.min(5, value + 1))
             }
           }
         } catch (failure) {
-          if (controller.signal.aborted) {
-            setStatus('idle')
-            return
-          }
+          if (controller.signal.aborted) return
           const failureMessage = messageOf(failure)
           writeDiagnostic({ stage: 'error', message: failureMessage.slice(0, 800) })
           const local = buildLocalResult(text, { mode, detail, language, target, scenario })
-          setResult(local)
-          setStatus('ready')
-          setTab('analysis')
-          setPendingApply(null)
-          setError(t('err.fallback') + (failureMessage === '' ? '' : ' · ' + failureMessage.slice(0, 320)))
-          setNoticeKind('warn')
+          publishGeneration(owner, {
+            status: 'ready',
+            result: local,
+            error: t('err.fallback') + (failureMessage === '' ? '' : ' · ' + failureMessage.slice(0, 320)),
+            notice: '',
+            noticeKind: 'warn',
+            pendingApply: null,
+          })
+          if (ownerIsCurrent()) setTab('analysis')
         } finally {
-          if (abortRef.current === controller) abortRef.current = null
+          if (generationControllers.get(owner) === controller) generationControllers.delete(owner)
+          activeGenerations = Math.max(0, activeGenerations - 1)
         }
       }
 
       const cancelGenerate = () => {
-        if (abortRef.current !== null) {
+        const record = readJobRecord(sessionId)
+        if (record !== null && executeCommand !== undefined) {
+          void executeCommand(
+            sessionId,
+            '/' + BACKGROUND_CANCEL_COMMAND + ' ' + JSON.stringify({ jobId: record.jobId }),
+            undefined,
+          ).catch(() => {})
+        }
+        clearJobRecord(sessionId)
+        const controller = generationControllers.get(sessionId)
+        if (controller !== undefined) {
           try {
-            abortRef.current.abort()
+            controller.abort()
           } catch {
             // ignore
           }
-          abortRef.current = null
+          generationControllers.delete(sessionId)
         }
-        setStatus('idle')
+        publishGeneration(sessionId, { status: 'idle' })
       }
 
       const submitClarifications = () => {
@@ -2048,6 +2475,8 @@ window.__ModuleLoader__.load({
       const [sessionState, sessionActions] = useSessionStore(props.sessionId)
       const draft = useInput === undefined ? '' : useInput((state) => state.draft)
       const open = sessionState.open
+      const background = sessionState.gen !== undefined
+        && (sessionState.gen.unseen === true || (sessionState.gen.status === 'generating' && !open))
       return h('button', {
         type: 'button',
         className: 'rcp-trigger',
@@ -2058,6 +2487,11 @@ window.__ModuleLoader__.load({
         title: open ? t('aria.collapse') : t('trigger.title') + ' — ' + t('trigger.hint'),
         onMouseDown: (event) => event.preventDefault(),
         onClick: () => {
+          const cached = generationFor(props.sessionId)
+          if (cached.unseen === true) {
+            cached.unseen = false
+            notifySession(props.sessionId)
+          }
           if (open) {
             sessionActions.setOpen(false)
             return
@@ -2071,7 +2505,9 @@ window.__ModuleLoader__.load({
           if (text.length >= 2) sessionActions.requestOrganize(draft)
           else sessionActions.setOpen(true)
         },
-      }, h(IconSparkle, { size: 15 }))
+      }, h(IconSparkle, { size: 15 }), background
+        ? h('span', { className: 'rcp-trigger-dot', 'data-rcp-background': 'true', 'aria-hidden': 'true' })
+        : null)
     }
 
     // ------------------------------------------------------------------- apply
@@ -2113,19 +2549,22 @@ window.__ModuleLoader__.load({
       }, RequirementPanel)))
 
       // The command lifecycle is log-only, but the Chat target still renders a
-      // command row. Hiding only this command name keeps every other command's
-      // card untouched while a generation stays out of the visible transcript.
-      attempt('command-row', () => ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
-        name: 'conversation.chat.commandview',
-        key: COMMAND_NAME,
-      }, function RequirementCommandRow() {
-        return null
-      })))
+      // command row. Hide every command this plugin dispatches so background
+      // polling never appears in the visible transcript.
+      for (const commandName of [COMMAND_NAME, BACKGROUND_START_COMMAND, BACKGROUND_STATUS_COMMAND, BACKGROUND_CANCEL_COMMAND]) {
+        attempt('command-row:' + commandName, () => ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
+          name: 'conversation.chat.commandview',
+          key: commandName,
+        }, function RequirementCommandRow() {
+          return null
+        })))
+      }
     }
 
     return {
       inject: ['slots', 'locale'],
       apply,
+      __testing: { generationFor, defaultGenerationState, MAX_ACTIVE_GENERATIONS },
     }
   },
 })

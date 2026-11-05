@@ -9,15 +9,15 @@
 | 显示名 | 帮我说 / Say It For Me |
 | 插件包名 | `dsh-requirement-copilot` |
 | 分发包名 | `dsh-requirement-copilot`（npm 公开发布） |
-| npm | `dsh-requirement-copilot@1.6.1` |
+| npm | `dsh-requirement-copilot@1.6.1`（`1.8.0` 已构建，待发布） |
 | 形态 | DSH Profile Bundle（Host 半 + Client 半，Web GUI 插件） |
-| 版本 | `1.6.1`（tag `v1.6.1`） |
+| 版本 | `1.8.0`（tag `v1.8.0`） |
 | 运行配置 | 无（`config: {}`） |
 | 测试 | `node --test`，27 个用例；`evals/` 20 条质量评测 |
 | 远端 | Gitee 私有仓库 `coreyleung/requirement-copilot` |
 | 许可 | MIT（见 [LICENSE](LICENSE)） |
 
-最后更新：2026-11-05 · 对应版本 `v1.6.1`
+最后更新：2026-11-05 · 对应版本 `v1.8.0`
 
 ---
 
@@ -171,6 +171,14 @@ dsh plugin add dsh-requirement-copilot
 - **恢复原草稿**：仅在本次整理覆盖过输入框时可用。
 
 如果输入框已经是同一段内容，插入会被判定为「已存在」并跳过，避免重复追加。
+
+#### 切换会话 / 后台生成
+
+- 生成过程中切到另一个会话，**不会取消**当前生成；结果按原会话保留，切回来仍能看到；
+- 后台完成时不会把结果写进你正在看的另一个会话的输入框；只保存结果，回到原会话后再插入；
+- 每个会话同时最多 1 个生成任务，全局最多 2 个；后台生成/未读结果会在 ✨ 按钮上显示小圆点；
+- `1.8.0` 起生成在 **Host 后台任务**里运行：关面板、切会话、刷新页面后都可以用 jobId 恢复查询；
+- 后台任务结果在 Host 内存缓存 30 分钟；DSH 进程重启后任务丢失，但完成的结果已写入本会话历史（`localStorage`），可从历史载入。
 
 #### 开工前确认门
 
@@ -646,7 +654,7 @@ C:\Users\LENOVO\Documents\deepseek-harness\default-workspace\requirement-copilot
 ## 11. 版本管理
 
 - 版本号遵循 SemVer（`MAJOR.MINOR.PATCH`），版本历史见 [CHANGELOG.md](CHANGELOG.md)；
-- 已发布 tag：`v1.0.0`、`v1.0.1`、`v1.0.2`、`v1.0.3`、`v1.0.4`、`v1.0.5`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v1.5.1`、`v1.6.0`、`v1.6.1`（以 `git tag -n` 为准）；
+- 已发布 tag：`v1.0.0`、`v1.0.1`、`v1.0.2`、`v1.0.3`、`v1.0.4`、`v1.0.5`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v1.5.1`、`v1.6.0`、`v1.6.1`、`v1.7.0`、`v1.8.0`（以 `git tag -n` 为准）；
 - 提交规范：`type(scope): subject`（`feat` / `fix` / `docs` / `chore` / `refactor` / `test`）；
 - 发布流程：
   1. 把 `CHANGELOG.md` 的 `[Unreleased]` 整理到新版本号下并补日期；
@@ -660,7 +668,7 @@ C:\Users\LENOVO\Documents\deepseek-harness\default-workspace\requirement-copilot
 
 - `origin`：`https://gitee.com/coreyleung/requirement-copilot.git`（Gitee 私有仓库，URL 中不含凭据）；
 - 推送凭据从 Connector Hub（`~/.connector-hub/credentials.json`）读取或由调用方提供，**不要写进 remote URL、配置文件或提交**；
-- 已推送内容：`main` 与 `v1.0.0`–`v1.6.1` 全部 tag。
+- 已推送内容：`main` 与 `v1.0.0`–`v1.8.0` 全部 tag。
 
 ---
 

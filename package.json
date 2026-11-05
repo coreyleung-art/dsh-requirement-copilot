@@ -1,6 +1,6 @@
 {
   "name": "dsh-requirement-copilot",
-  "version": "1.6.1",
+  "version": "1.8.0",
   "type": "module",
   "description": "Say It For Me (帮我说): collect, analyze, translate, and complete rough requirement notes into an agent-ready prompt that can be inserted into the chat composer.",
   "license": "MIT",

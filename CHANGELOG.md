@@ -20,6 +20,38 @@
 
 - 暂无。
 
+## [1.8.0] - 2026-11-05
+
+### Added
+
+- Host 后台任务：`refine-prompt-start` / `refine-prompt-status` / `refine-prompt-cancel`，`start` 立即返回 jobId，模型调用在 Host 继续。
+- 结果按 jobId 缓存 30 分钟，最多 20 个任务；每会话 1 个、全局 2 个并发。
+- Client 轮询后台状态；jobId 存 `localStorage`（`rcp-job:<sessionId>`），刷新页面后可恢复查询。
+- 关面板、切会话、刷新页面都不再依赖原命令的请求生命周期。
+
+### Notes
+
+- Host job 存在内存中：DSH 进程重启后任务丢失；完成后结果仍会写入会话历史（localStorage）。
+- 后台完成不自动写回 Composer；回到原会话后由用户插入。
+
+## [1.7.0] - 2026-11-05
+
+### Fixed
+
+- 切换会话不再 abort 生成：生成状态按 `sessionId` 存放在模块级缓存，切走继续跑，回到原会话可看到结果。
+- 后台完成不会把结果写进当前其他会话的 Composer；跨会话完成只缓存结果，避免串会话。
+- 组件卸载/会话切换不再自动 abort；只有同一会话内取消或重新生成才会取消旧任务。
+
+### Added
+
+- 每个会话最多 1 个生成任务，全局最多 2 个；超出时提示稍候。
+- 后台生成/未读结果在 ✨ 触发按钮上显示小圆点。
+- 后台完成提示与 `status.busy` / `status.backgroundReady` 文案。
+
+### Notes
+
+- 本版本只在 DSH 页面/进程存活期间保留后台生成；刷新页面仍会丢失。Host 后台任务（跨刷新）在 1.8.0。
+
 ## [1.6.1] - 2026-11-05
 
 ### Added

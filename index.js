@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 /**
  * Say It For Me (帮我说) — Host half.
  *
@@ -24,8 +26,17 @@
 
 /** Human command the Client half dispatches. */
 const COMMAND_NAME = 'refine-prompt'
+/** Background-job commands used by the 1.8 client when available. */
+const BACKGROUND_START_COMMAND = 'refine-prompt-start'
+const BACKGROUND_STATUS_COMMAND = 'refine-prompt-status'
+const BACKGROUND_CANCEL_COMMAND = 'refine-prompt-cancel'
 /** Agent tool exposing the same operation to the model. */
 const TOOL_NAME = 'refine_requirement'
+
+/** Background jobs stay queryable after the panel/session is left. */
+const JOB_TTL_MS = 30 * 60 * 1000
+const JOB_MAX = 20
+const JOB_MAX_ACTIVE = 2
 
 /** Hard limits that keep one panel request inside a sane model call. */
 const MAX_INPUT_CHARS = 8000
@@ -759,6 +770,159 @@ async function repairAndBuild(ctx, state) {
   return buildResult(repaired, request, route)
 }
 
+/**
+ * Host-owned background jobs. `start` returns immediately; the model call keeps
+ * running even if the client switches sessions, closes the panel, or reloads.
+ * Results stay queryable for JOB_TTL_MS so the client can resume by job id.
+ */
+function createBackgroundJobs(ctx) {
+  const jobs = new Map()
+  let active = 0
+  let disposed = false
+  const timer = setInterval(() => {
+    prune()
+  }, 60 * 1000)
+  if (typeof timer.unref === 'function') timer.unref()
+
+  function publicJob(job) {
+    const value = {
+      jobId: job.id,
+      status: job.status,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      expiresAt: job.expiresAt,
+    }
+    if (job.status === 'succeeded') value.result = job.result
+    if (job.status === 'failed') value.code = job.code
+    if (job.status === 'failed' || job.status === 'cancelled') value.error = job.error
+    return value
+  }
+
+  function prune() {
+    const now = Date.now()
+    for (const [id, job] of jobs) {
+      if (job.expiresAt !== null && job.expiresAt <= now) jobs.delete(id)
+    }
+    if (jobs.size <= JOB_MAX) return
+    const terminal = [...jobs.values()]
+      .filter((job) => job.status !== 'running')
+      .sort((a, b) => a.updatedAt - b.updatedAt)
+    while (jobs.size > JOB_MAX && terminal.length > 0) {
+      jobs.delete(terminal.shift().id)
+    }
+  }
+
+  function start(input) {
+    prune()
+    if (disposed) throw new CopilotError('E_DISPOSED', '后台任务服务已结束，请重试。')
+    const ownerSessionId = typeof input.ownerSessionId === 'string' ? input.ownerSessionId : ''
+    if (ownerSessionId !== '') {
+      for (const job of jobs.values()) {
+        if (job.status === 'running' && job.ownerSessionId === ownerSessionId) {
+          throw new CopilotError('E_BUSY', '这个会话已有一个生成任务在后台运行。')
+        }
+      }
+    }
+    if (active >= JOB_MAX_ACTIVE) {
+      throw new CopilotError('E_BUSY', '后台已有 2 个生成任务，请稍候再试。')
+    }
+    if (jobs.size >= JOB_MAX) {
+      throw new CopilotError('E_BUSY', '后台任务缓存已满，请稍候再试。')
+    }
+    const id = randomUUID()
+    const controller = new AbortController()
+    const now = Date.now()
+    const job = {
+      id,
+      ownerSessionId,
+      status: 'running',
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: null,
+      controller,
+      result: null,
+      code: '',
+      error: '',
+    }
+    jobs.set(id, job)
+    active += 1
+    Promise.resolve()
+      .then(() => generate(ctx, input, controller.signal))
+      .then((data) => {
+        if (job.status === 'cancelled') return
+        job.status = 'succeeded'
+        job.result = data
+        job.error = ''
+        job.code = ''
+        job.updatedAt = Date.now()
+      })
+      .catch((error) => {
+        if (job.status === 'cancelled' || controller.signal.aborted) return
+        job.status = 'failed'
+        job.code = error instanceof CopilotError ? error.code : 'E_UNKNOWN'
+        job.error = messageOf(error)
+        job.result = null
+        job.updatedAt = Date.now()
+      })
+      .finally(() => {
+        active = Math.max(0, active - 1)
+        job.controller = null
+        if (job.status === 'running') {
+          job.status = 'failed'
+          job.code = 'E_UNKNOWN'
+          job.error = '后台任务意外结束。'
+        }
+        if (job.updatedAt === job.createdAt) job.updatedAt = Date.now()
+        job.expiresAt = Date.now() + JOB_TTL_MS
+      })
+    return publicJob(job)
+  }
+
+  function status(jobId) {
+    prune()
+    const job = jobs.get(typeof jobId === 'string' ? jobId : '')
+    if (job === undefined) return null
+    return publicJob(job)
+  }
+
+  function cancel(jobId) {
+    const job = jobs.get(typeof jobId === 'string' ? jobId : '')
+    if (job === undefined) return null
+    if (job.status === 'running') {
+      job.status = 'cancelled'
+      job.error = '生成已取消。'
+      job.updatedAt = Date.now()
+      job.expiresAt = Date.now() + JOB_TTL_MS
+      try {
+        job.controller.abort()
+      } catch {
+        // ignore
+      }
+    }
+    return publicJob(job)
+  }
+
+  function dispose() {
+    disposed = true
+    clearInterval(timer)
+    for (const job of jobs.values()) {
+      if (job.status === 'running') {
+        job.status = 'cancelled'
+        job.error = '插件已卸载。'
+        job.updatedAt = Date.now()
+        job.expiresAt = Date.now() + JOB_TTL_MS
+        try {
+          job.controller.abort()
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  return { start, status, cancel, dispose }
+}
+
 /** Model-facing rendering of one result. */
 function renderForModel(value) {
   const data = value !== null && typeof value === 'object' ? value : {}
@@ -844,6 +1008,69 @@ const SKILL_CONTENT = [
  * human command. Both are Cordis effects owned by this plugin's fiber.
  */
 export function apply(ctx) {
+  const backgroundJobs = createBackgroundJobs(ctx)
+  ctx.effect(() => () => backgroundJobs.dispose(), 'requirement-copilot: background jobs cleanup')
+
+  const parsePayload = (rawInput) => {
+    const raw = typeof rawInput === 'string' ? rawInput.trim() : ''
+    if (raw === '') return { error: '请求载荷为空。' }
+    try {
+      return { payload: JSON.parse(raw) }
+    } catch {
+      return { error: '请求载荷不是合法 JSON。' }
+    }
+  }
+  const successEnvelope = (data) => ({ kind: 'success', text: JSON.stringify({ ok: true, data }) })
+  const failureEnvelope = (error) => ({
+    kind: 'success',
+    text: JSON.stringify({
+      ok: false,
+      code: error instanceof CopilotError ? error.code : 'E_UNKNOWN',
+      error: messageOf(error),
+    }),
+  })
+
+  ctx.effect(() => ctx.commands.register({
+    name: BACKGROUND_START_COMMAND,
+    description: '帮我说：启动一个可跨会话继续的后台生成任务',
+    recordInput: false,
+    handler: async (invocation) => {
+      const parsed = parsePayload(invocation.rawInput)
+      if (parsed.error !== undefined) return failureEnvelope(new CopilotError('E_BAD_PAYLOAD', parsed.error))
+      try {
+        return successEnvelope(backgroundJobs.start(parsed.payload))
+      } catch (error) {
+        return failureEnvelope(error)
+      }
+    },
+  }), 'requirement-copilot: background start')
+
+  ctx.effect(() => ctx.commands.register({
+    name: BACKGROUND_STATUS_COMMAND,
+    description: '帮我说：查询后台生成任务状态',
+    recordInput: false,
+    handler: async (invocation) => {
+      const parsed = parsePayload(invocation.rawInput)
+      if (parsed.error !== undefined) return failureEnvelope(new CopilotError('E_BAD_PAYLOAD', parsed.error))
+      const job = backgroundJobs.status(parsed.payload.jobId)
+      if (job === null) return failureEnvelope(new CopilotError('E_JOB_NOT_FOUND', '后台任务不存在或已过期。'))
+      return successEnvelope(job)
+    },
+  }), 'requirement-copilot: background status')
+
+  ctx.effect(() => ctx.commands.register({
+    name: BACKGROUND_CANCEL_COMMAND,
+    description: '帮我说：取消后台生成任务',
+    recordInput: false,
+    handler: async (invocation) => {
+      const parsed = parsePayload(invocation.rawInput)
+      if (parsed.error !== undefined) return failureEnvelope(new CopilotError('E_BAD_PAYLOAD', parsed.error))
+      const job = backgroundJobs.cancel(parsed.payload.jobId)
+      if (job === null) return failureEnvelope(new CopilotError('E_JOB_NOT_FOUND', '后台任务不存在或已过期。'))
+      return successEnvelope(job)
+    },
+  }), 'requirement-copilot: background cancel')
+
   ctx.effect(() => ctx.commands.register({
     name: COMMAND_NAME,
     description: '帮我说：把输入框附近的描述整理成可直接执行的 Agent Prompt（由帮我说面板调用）',

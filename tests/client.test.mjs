@@ -107,6 +107,23 @@ function createRetryRemote() {
   }
 }
 
+test('client: generation cache is isolated per session', () => {
+  const { moduleExports } = loadClientModule()
+  const testing = moduleExports.__testing
+  assert.ok(testing)
+  const a = testing.generationFor('session-a')
+  const b = testing.generationFor('session-b')
+  assert.notEqual(a, b)
+  assert.equal(a.status, 'idle')
+  assert.equal(b.status, 'idle')
+  a.status = 'ready'
+  a.result = { prompt: 'A' }
+  assert.equal(b.status, 'idle')
+  assert.equal(b.result, null)
+  assert.equal(testing.generationFor('session-a').result.prompt, 'A')
+  assert.equal(testing.MAX_ACTIVE_GENERATIONS, 2)
+})
+
 test('client: bundle contract, locale parity and slot registrations', () => {
   const { entry, moduleExports, required } = loadClientModule()
   assert.equal(entry.id, 'dsh-requirement-copilot')
@@ -123,7 +140,7 @@ test('client: bundle contract, locale parity and slot registrations', () => {
   const zhKeys = Object.keys(locales[0].dicts.zh).sort()
   const enKeys = Object.keys(locales[0].dicts.en).sort()
   assert.deepEqual(zhKeys, enKeys, 'zh/en locale keys must stay aligned')
-  for (const key of ['action.restore', 'status.alreadyInserted', 'field.label', 'status.restored', 'status.applied', 'status.draftChanged', 'option.target', 'option.target.claude-code', 'option.target.codex', 'option.target.cursor', 'gate.title', 'gate.apply', 'gate.skip', 'gate.pendingApply', 'gate.choices', 'gate.supplement', 'gate.prev', 'gate.next', 'gate.skipOne', 'aria.drag', 'option.scenario', 'option.scenario.coding', 'quality.title', 'quality.check.structure', 'history.title', 'history.load', 'history.clear', 'revision.open', 'revision.apply', 'revision.cancel', 'diff.title', 'diff.compare', 'diff.previous']) {
+  for (const key of ['action.restore', 'status.alreadyInserted', 'field.label', 'status.restored', 'status.applied', 'status.draftChanged', 'status.busy', 'status.backgroundReady', 'option.target', 'option.target.claude-code', 'option.target.codex', 'option.target.cursor', 'gate.title', 'gate.apply', 'gate.skip', 'gate.pendingApply', 'gate.choices', 'gate.supplement', 'gate.prev', 'gate.next', 'gate.skipOne', 'aria.drag', 'option.scenario', 'option.scenario.coding', 'quality.title', 'quality.check.structure', 'history.title', 'history.load', 'history.clear', 'revision.open', 'revision.apply', 'revision.cancel', 'diff.title', 'diff.compare', 'diff.previous']) {
     assert.ok(zhKeys.includes(key), 'missing zh locale key: ' + key)
     assert.ok(enKeys.includes(key), 'missing en locale key: ' + key)
   }
@@ -136,7 +153,7 @@ test('client: bundle contract, locale parity and slot registrations', () => {
   assert.equal(zhMeta.meta.title, '帮我说')
   assert.equal(enMeta.meta.title, 'Say It For Me')
 
-  assert.equal(registrations.length, 3)
+  assert.equal(registrations.length, 6)
   const trigger = registrationNamed(registrations, 'conversation.input.right')
   assert.ok(trigger, 'trigger registration missing')
   assert.equal(trigger.options.id, 'requirement-copilot-trigger')
@@ -150,11 +167,17 @@ test('client: bundle contract, locale parity and slot registrations', () => {
   const injected = panel.options.inject()
   assert.equal(typeof injected.executeCommand, 'function')
 
-  const commandRow = registrationNamed(registrations, 'conversation.chat.commandview')
-  assert.ok(commandRow, 'command row registration missing')
-  assert.equal(commandRow.options.key, 'refine-prompt')
-  assert.equal(typeof commandRow.component, 'function')
-  assert.equal(commandRow.component(), null, 'the command row must render nothing')
+  const commandRows = registrations.filter((entry) => entry.options.name === 'conversation.chat.commandview')
+  assert.deepEqual(commandRows.map((entry) => entry.options.key).sort(), [
+    'refine-prompt',
+    'refine-prompt-cancel',
+    'refine-prompt-start',
+    'refine-prompt-status',
+  ])
+  for (const commandRow of commandRows) {
+    assert.equal(typeof commandRow.component, 'function')
+    assert.equal(commandRow.component(), null, 'the command row must render nothing')
+  }
 })
 
 test('client: command resolver retries the three-argument form after an arity error', async () => {
