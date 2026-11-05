@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "bugfix-login-timeout",
+      "category": "bugfix",
+      "rough": "登录偶尔超时，用户要等十几秒才失败；帮我整理成给智能体的修复任务，要求先复现再改。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["登录", "超时", "复现", "验收"]
+    },
+    {
+      "id": "feature-export-excel",
+      "category": "feature",
+      "rough": "订单列表要支持按筛选条件导出 Excel，文件名带日期，导出过程不能卡住页面。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["订单", "导出", "Excel", "文件名"]
+    },
+    {
+      "id": "refactor-legacy-payment",
+      "category": "refactor",
+      "rough": "支付模块是几年前写的，逻辑都堆在一个类里，想重构但不想改对外接口和行为。",
+      "mode": "spec",
+      "detail": "detailed",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["支付", "重构", "接口", "行为"]
+    },
+    {
+      "id": "research-competitor-pricing",
+      "category": "research",
+      "rough": "调研三家竞品的定价页，整理成对比表，标出我们和他们的差异，下周评审用。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["竞品", "定价", "对比", "评审"]
+    },
+    {
+      "id": "docs-api-readme",
+      "category": "writing",
+      "rough": "Write a README section for our REST API: authentication, rate limits, pagination, and a curl example. Keep it practical.",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "en",
+      "target": "generic",
+      "mustInclude": ["README", "authentication", "rate limits", "curl"]
+    },
+    {
+      "id": "data-weekly-report",
+      "category": "data",
+      "rough": "每周一自动生成上周销售周报：GMV、订单量、退款率，按渠道拆分，输出 HTML 邮件。",
+      "mode": "agent",
+      "detail": "detailed",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["周报", "GMV", "退款率", "渠道"]
+    },
+    {
+      "id": "design-mobile-onboarding",
+      "category": "design",
+      "rough": "新用户第一次打开 App 的引导页太丑，想要三屏以内、能跳过、别挡隐私弹窗，风格干净。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["引导", "跳过", "隐私", "干净"]
+    },
+    {
+      "id": "automation-gitlab-feishu",
+      "category": "automation",
+      "rough": "每周五把 GitLab 上本周合并的 MR 汇总，按项目分组发到飞书群，节假日跳过。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["GitLab", "MR", "飞书", "节假日"]
+    },
+    {
+      "id": "security-permission-audit",
+      "category": "security",
+      "rough": "后台权限太乱，运营能看到财务数据。帮我整理一个权限梳理任务，先盘点再最小化授权。",
+      "mode": "spec",
+      "detail": "detailed",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["权限", "财务", "盘点", "最小化"]
+    },
+    {
+      "id": "performance-list-slow",
+      "category": "performance",
+      "rough": "Project list loads slowly with 5,000 items; scrolling stutters. We need a profiling-first optimization task with measurable targets.",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "en",
+      "target": "cursor",
+      "mustInclude": ["list", "profiling", "targets"]
+    },
+    {
+      "id": "migration-mysql-postgres",
+      "category": "migration",
+      "rough": "把现有 MySQL 迁到 PostgreSQL，数据量不大但不能停机，希望先做双写演练。",
+      "mode": "spec",
+      "detail": "detailed",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["MySQL", "PostgreSQL", "双写", "停机"]
+    },
+    {
+      "id": "test-e2e-checkout",
+      "category": "testing",
+      "rough": "Add end-to-end tests for checkout: guest checkout, coupon failure, payment timeout, and order confirmation email.",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "en",
+      "target": "codex",
+      "mustInclude": ["checkout", "coupon", "timeout", "email"]
+    },
+    {
+      "id": "i18n-japanese",
+      "category": "i18n",
+      "rough": "产品要进日本市场，先把设置页做成中日英三语，日期和货币格式要跟随系统。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["日本", "三语", "日期", "货币"]
+    },
+    {
+      "id": "billing-invoice-export",
+      "category": "billing",
+      "rough": "客户要能自己下载历史发票，PDF 要带公司抬头和税号，权限只能看自己公司的。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["发票", "PDF", "税号", "权限"]
+    },
+    {
+      "id": "notification-email-digest",
+      "category": "notification",
+      "rough": "现在通知邮件太多，改成每天一封摘要：按项目分组，支持退订，重要告警仍然即时发。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["摘要", "退订", "告警", "分组"]
+    },
+    {
+      "id": "analytics-funnel-dashboard",
+      "category": "analytics",
+      "rough": "Build a funnel dashboard for signup → activation → paid, with weekly cohorts and CSV export; define acceptance checks.",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "en",
+      "target": "claude-code",
+      "mustInclude": ["funnel", "cohorts", "CSV", "acceptance"]
+    },
+    {
+      "id": "ops-alert-runbook",
+      "category": "ops",
+      "rough": "线上 Redis 内存告警没有处置流程，帮我整理成值班 runbook：判断、止损、升级、复盘。",
+      "mode": "spec",
+      "detail": "detailed",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["Redis", "告警", "止损", "复盘"]
+    },
+    {
+      "id": "mobile-offline-cache",
+      "category": "mobile",
+      "rough": "App 在地铁没网时白屏，希望缓存最近数据、显示离线提示，恢复网络后自动刷新。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["离线", "缓存", "白屏", "刷新"]
+    },
+    {
+      "id": "api-rate-limit",
+      "category": "api",
+      "rough": "开放 API 被脚本刷爆了，想加限流和配额：按 key 限速、超限返回 429、后台可查用量。",
+      "mode": "agent",
+      "detail": "standard",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["限流", "配额", "429", "用量"]
+    },
+    {
+      "id": "writing-release-notes",
+      "category": "writing",
+      "rough": "把这一版的功能、修复和破坏性变更写成发布说明，面向客户，别写内部黑话。",
+      "mode": "agent",
+      "detail": "concise",
+      "language": "auto",
+      "target": "generic",
+      "mustInclude": ["发布说明", "破坏性变更", "客户"]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Say It For Me",
+    "description": "Collects rough requirement notes, analyzes the gaps, translates them, and turns them into an agent-ready prompt that can be inserted straight into the composer."
+  }
+}

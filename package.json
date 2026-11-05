@@ -1,0 +1,72 @@
+{
+  "name": "dsh-requirement-copilot",
+  "version": "1.6.0",
+  "type": "module",
+  "description": "Say It For Me (帮我说): collect, analyze, translate, and complete rough requirement notes into an agent-ready prompt that can be inserted into the chat composer.",
+  "license": "MIT",
+  "author": {
+    "name": "coreyleung"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "prompt",
+    "prompt-engineering",
+    "requirement",
+    "requirements",
+    "clarification",
+    "spec"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coreyleung-art/dsh-requirement-copilot.git"
+  },
+  "homepage": "https://github.com/coreyleung-art/dsh-requirement-copilot#readme",
+  "bugs": {
+    "url": "https://github.com/coreyleung-art/dsh-requirement-copilot/issues"
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.1 <0.3.0",
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "eval": "node evals/run-eval.mjs",
+    "eval:live": "node evals/run-eval.mjs --live",
+    "dist": "node scripts/build-dist.mjs",
+    "pack": "node scripts/build-dist.mjs --pack"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

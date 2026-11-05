@@ -1,0 +1,7 @@
+# Say It For Me (帮我说) bundle patch.
+# Inserts the Host half (command + Agent tool). The Client half is declared by
+# package.json's `dsh.client` section and loaded by the Web plugin table.
+- insert:
+    - id: requirement-copilot
+      name: 'dsh-requirement-copilot'
+      config: {}
