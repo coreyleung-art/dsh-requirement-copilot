@@ -147,10 +147,10 @@ dsh plugin add dsh-requirement-copilot
 
 - [x] 公开包名确定：`dsh-requirement-copilot`
 - [x] 源码/包/bundle/client id 统一为公开名
-- [x] 构建脚本与 staging 目录
+- [x] 构建脚本、镜像脚本与 staging 目录
 - [x] `npm pack` tarball（10 files，约 60 KB）
 - [x] 上架文案（`docs/MARKETPLACE_LISTING.md`）
-- [x] GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot`（public，`dsh-plugin` topic 已加）
+- [x] GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot`（public，`dsh-plugin` topic 已加，v1.6.1 已镜像）
 - [ ] npm 登录 / 发布（缺凭据）
 - [ ] dshbase issue 提交（等 npm 发布后填 npm 包名）
 - [ ] dsh-plugins.tech（站点入口未开放）

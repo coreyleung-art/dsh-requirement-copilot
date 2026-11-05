@@ -372,7 +372,8 @@ requirement-copilot/
 │  ├─ rubric.md          # 结构检查 + 人工评分标准
 │  └─ run-eval.mjs       # 评测 runner（dry-run / --live）
 ├─ scripts/
-│  └─ build-dist.mjs     # 生成公开发布包 dsh-requirement-copilot
+│  ├─ build-dist.mjs     # 生成公开发布包 dsh-requirement-copilot
+│  └─ mirror-github.mjs  # 网络受限时用 GitHub API 镜像 main
 ├─ .github/workflows/
 │  └─ publish.yml        # GitHub 镜像的 npm 发布流程
 └─ tests/
