@@ -33,13 +33,19 @@ dist/
 
 ## 3. 发布到 npm
 
-当前机器 **未登录 npm**（`npm whoami` 返回 `ENEEDAUTH`）。先由账号持有人完成登录或提供 CI token：
+当前机器已登录 npm（账号 `coreyleung`），但发布被 registry 要求 2FA/OTP 拒绝：
+
+```text
+E403: Two-factor authentication or granular access token with bypass 2fa enabled is required to publish packages.
+```
+
+请在本地交互终端执行并在提示时输入 OTP（不要把 OTP 发到聊天里）：
 
 ```bash
-npm login
-npm whoami
-npm publish dist/dsh-requirement-copilot-<version>.tgz --access public
+npm publish ./dist/dsh-requirement-copilot-1.6.1.tgz --access public
 ```
+
+或使用开启了 **Bypass 2FA** 的 granular access token（只放在本地环境变量，不要提交/发送）。
 
 验证：
 
@@ -151,7 +157,7 @@ dsh plugin add dsh-requirement-copilot
 - [x] `npm pack` tarball（10 files，约 60 KB）
 - [x] 上架文案（`docs/MARKETPLACE_LISTING.md`）
 - [x] GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot`（public，`dsh-plugin` topic 已加，v1.6.1 已镜像）
-- [ ] npm 登录 / 发布（缺凭据）
+- [ ] npm 发布（账号已登录 `coreyleung`；registry 要求 2FA/OTP，需在本地交互终端执行 `npm publish`）
 - [ ] dshbase issue 提交（自动提交返回 403：token 无第三方仓库 issue 写权限；可复制 `docs/DSHBASE_SUBMISSION.md` 手动提交）
 - [ ] dsh-plugins.tech（站点入口未开放）
 - [ ] 真实模型质量基线（`evals/run-eval.mjs --live`，缺端点/额度）
