@@ -100,11 +100,11 @@ git push github main --tags
 | 需要外部账号/服务 | 否，开箱即用（使用 DSH 已配置的默认模型） |
 | 确认 | 已加 `dsh-plugin` topic；有 `dsh.bundle`；有 LICENSE |
 
-## 6. 提交 dsh-plugins.tech
+## 6. 提交 dsh-plugins.tech / 1024store
 
-入口：<https://dsh-plugins.tech/submit>
-
-当前该站点显示「提交入口尚未连接身份服务」，无法直接提交；先完成 npm + GitHub + dshbase，再关注其开放状态。其分类目录已包含「需求澄清与规格沉淀」，可作为上架后的类目参考。
+- dsh-plugins.tech：<https://dsh-plugins.tech/submit> 当前显示“提交入口尚未连接身份服务”，暂不可提交。
+- 1024store / awesome 列表：按 [CONTRIBUTING](https://github.com/imsai-sh/awesome-deepseek-harness-plugins/blob/main/CONTRIBUTING.md) 提交一个 `catalog/plugins/coreyleung-art--dsh-requirement-copilot.json`，内容见仓库内 `docs/catalog-entry.json`；PR 只允许改这一个文件，合并后会自动同步到站点。
+- npm 发布后 install 命令会由 catalog 自动识别；未发布时只能 browse-only。
 
 ## 7. 发布后验证
 

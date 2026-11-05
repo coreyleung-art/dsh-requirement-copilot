@@ -1,0 +1,12 @@
+{
+  "$schema": "../schema/plugin.schema.json",
+  "id": "coreyleung-art/dsh-requirement-copilot",
+  "name": "dsh-requirement-copilot",
+  "repository": "https://github.com/coreyleung-art/dsh-requirement-copilot",
+  "category": "tools",
+  "description": {
+    "en": "Turns rough requirement notes into a validated, agent-ready prompt with explicit gaps, suggested answers, acceptance criteria and bilingual output inside the DeepSeek Harness composer.",
+    "zh": "把零散需求整理成带缺口清单、候选答案、验收标准与双语的 Agent Prompt，并在 DSH 输入框内确认后写回。"
+  },
+  "added": "2026-11-05"
+}
