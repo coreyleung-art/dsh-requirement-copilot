@@ -30,6 +30,7 @@
 ### Changed
 
 - 源码/包/bundle/client id/profile link 统一为 `dsh-requirement-copilot`；旧 `@local/requirement-copilot` profile 依赖已替换。
+- 已发布 npm：`dsh-requirement-copilot@1.6.1`（https://www.npmjs.com/package/dsh-requirement-copilot）。
 - README/分发手册更新 GitHub 镜像与当前发布状态。
 
 ## [1.6.0] - 2026-11-05

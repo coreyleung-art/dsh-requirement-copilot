@@ -33,19 +33,15 @@ dist/
 
 ## 3. 发布到 npm
 
-当前机器已登录 npm（账号 `coreyleung`），但发布被 registry 要求 2FA/OTP 拒绝：
+`dsh-requirement-copilot@1.6.1` 已发布到 npm：<https://www.npmjs.com/package/dsh-requirement-copilot>
 
-```text
-E403: Two-factor authentication or granular access token with bypass 2fa enabled is required to publish packages.
-```
+后续版本发布注意：
 
-请在本地交互终端执行并在提示时输入 OTP（不要把 OTP 发到聊天里）：
-
-```bash
-npm publish ./dist/dsh-requirement-copilot-1.6.1.tgz --access public
-```
-
-或使用开启了 **Bypass 2FA** 的 granular access token（只放在本地环境变量，不要提交/发送）。
+- 直接 `npm publish` 需要交互式 2FA/OTP；
+- 2FA-bypass token 的直接发布能力正在被 npm 收紧（[公告](https://github.blog/changelog/2026-07-31-restricting-npm-bypass-2fa-granular-access-tokens/)），长期应迁移到 trusted publishing（OIDC）或 stage-only token + `npm stage approve`；
+- 不要把 `.npmrc` / `NPM_TOKEN` 提交到仓库；
+- 发布后不可覆盖同版本，修 bug 需升版本；
+- 若发现严重问题：`npm deprecate dsh-requirement-copilot@<version> "reason"`，必要时 `npm unpublish`（24 小时内）。
 
 验证：
 
@@ -157,7 +153,7 @@ dsh plugin add dsh-requirement-copilot
 - [x] `npm pack` tarball（10 files，约 60 KB）
 - [x] 上架文案（`docs/MARKETPLACE_LISTING.md`）
 - [x] GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot`（public，`dsh-plugin` topic 已加，v1.6.1 已镜像）
-- [ ] npm 发布（账号已登录 `coreyleung`；registry 要求 2FA/OTP，需在本地交互终端执行 `npm publish`）
+- [x] npm 发布：`dsh-requirement-copilot@1.6.1`（https://www.npmjs.com/package/dsh-requirement-copilot）
 - [ ] dshbase issue 提交（自动提交返回 403：token 无第三方仓库 issue 写权限；可复制 `docs/DSHBASE_SUBMISSION.md` 手动提交）
 - [ ] dsh-plugins.tech（站点入口未开放）
 - [ ] 真实模型质量基线（`evals/run-eval.mjs --live`，缺端点/额度）

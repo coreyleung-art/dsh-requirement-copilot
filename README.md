@@ -9,6 +9,7 @@
 | 显示名 | 帮我说 / Say It For Me |
 | 插件包名 | `dsh-requirement-copilot` |
 | 分发包名 | `dsh-requirement-copilot`（npm 公开发布） |
+| npm | `dsh-requirement-copilot@1.6.1` |
 | 形态 | DSH Profile Bundle（Host 半 + Client 半，Web GUI 插件） |
 | 版本 | `1.6.1`（tag `v1.6.1`） |
 | 运行配置 | 无（`config: {}`） |
@@ -98,9 +99,9 @@
 
 > 本地开发时可以把 profile 里已安装的路径做成指向仓库的目录 junction，这样「仓库即唯一源码」，改动不需要重装。这是本机的维护方式，不属于插件的通用安装步骤。
 
-### 3.3 从 npm 安装（发布后）
+### 3.3 从 npm 安装
 
-公开发布包为 **`dsh-requirement-copilot`**。发布后可：
+公开发布包为 **`dsh-requirement-copilot`**，已发布到 npm。可直接：
 
 ```bash
 dsh plugin add dsh-requirement-copilot

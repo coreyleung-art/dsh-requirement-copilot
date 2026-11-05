@@ -20,7 +20,7 @@ dsh-requirement-copilot
 https://github.com/coreyleung-art/dsh-requirement-copilot
 
 ### npm 包名（可选）
-dsh-requirement-copilot（当前尚未发布；先按 browse-only 登记，发布后会更新）
+dsh-requirement-copilot（已发布 1.6.1）
 
 ### 功能描述
 把零散需求变成带缺口清单、候选答案、验收标准与双语的 Agent Prompt，一键写回输入框。Turn rough notes into a validated, agent-ready prompt with gaps, suggested answers, acceptance criteria and bilingual output.
