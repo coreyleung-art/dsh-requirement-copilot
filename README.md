@@ -694,6 +694,7 @@ C:\Users\LENOVO\Documents\deepseek-harness\default-workspace\requirement-copilot
 - [CHANGELOG.md](CHANGELOG.md) — 版本历史与发版记录
 - [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) — npm / GitHub / dshbase 分发与上架手册
 - [docs/MARKETPLACE_LISTING.md](docs/MARKETPLACE_LISTING.md) — 上架文案、标签与 FAQ
+- [docs/DSHBASE_SUBMISSION.md](docs/DSHBASE_SUBMISSION.md) — dshbase 收录 issue 的可复制内容
 - [docs/COMPETITIVE_LANDSCAPE.md](docs/COMPETITIVE_LANDSCAPE.md) — 市场与 DSH 生态竞品调研（2026-11-05）
 - [evals/rubric.md](evals/rubric.md) — Prompt 质量评测标准
 - [tests/host.test.mjs](tests/host.test.mjs) — Host 回归测试
