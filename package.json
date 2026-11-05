@@ -1,6 +1,6 @@
 {
   "name": "dsh-requirement-copilot",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "type": "module",
   "description": "Say It For Me (帮我说): collect, analyze, translate, and complete rough requirement notes into an agent-ready prompt that can be inserted into the chat composer.",
   "license": "MIT",
@@ -35,7 +35,8 @@
     "eval": "node evals/run-eval.mjs",
     "eval:live": "node evals/run-eval.mjs --live",
     "dist": "node scripts/build-dist.mjs",
-    "pack": "node scripts/build-dist.mjs --pack"
+    "pack": "node scripts/build-dist.mjs --pack",
+    "mirror:github": "node scripts/mirror-github.mjs"
   },
   "exports": {
     ".": "./index.js",

@@ -10,13 +10,13 @@
 | 插件包名 | `dsh-requirement-copilot` |
 | 分发包名 | `dsh-requirement-copilot`（npm 公开发布） |
 | 形态 | DSH Profile Bundle（Host 半 + Client 半，Web GUI 插件） |
-| 版本 | `1.6.0`（tag `v1.6.0`） |
+| 版本 | `1.6.1`（tag `v1.6.1`） |
 | 运行配置 | 无（`config: {}`） |
 | 测试 | `node --test`，27 个用例；`evals/` 20 条质量评测 |
 | 远端 | Gitee 私有仓库 `coreyleung/requirement-copilot` |
 | 许可 | MIT（见 [LICENSE](LICENSE)） |
 
-最后更新：2026-11-05 · 对应版本 `v1.6.0`
+最后更新：2026-11-05 · 对应版本 `v1.6.1`
 
 ---
 
@@ -644,7 +644,7 @@ C:\Users\LENOVO\Documents\deepseek-harness\default-workspace\requirement-copilot
 ## 11. 版本管理
 
 - 版本号遵循 SemVer（`MAJOR.MINOR.PATCH`），版本历史见 [CHANGELOG.md](CHANGELOG.md)；
-- 已发布 tag：`v1.0.0`、`v1.0.1`、`v1.0.2`、`v1.0.3`、`v1.0.4`、`v1.0.5`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v1.5.1`、`v1.6.0`（以 `git tag -n` 为准）；
+- 已发布 tag：`v1.0.0`、`v1.0.1`、`v1.0.2`、`v1.0.3`、`v1.0.4`、`v1.0.5`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v1.5.1`、`v1.6.0`、`v1.6.1`（以 `git tag -n` 为准）；
 - 提交规范：`type(scope): subject`（`feat` / `fix` / `docs` / `chore` / `refactor` / `test`）；
 - 发布流程：
   1. 把 `CHANGELOG.md` 的 `[Unreleased]` 整理到新版本号下并补日期；
@@ -658,7 +658,7 @@ C:\Users\LENOVO\Documents\deepseek-harness\default-workspace\requirement-copilot
 
 - `origin`：`https://gitee.com/coreyleung/requirement-copilot.git`（Gitee 私有仓库，URL 中不含凭据）；
 - 推送凭据从 Connector Hub（`~/.connector-hub/credentials.json`）读取或由调用方提供，**不要写进 remote URL、配置文件或提交**；
-- 已推送内容：`main` 与 `v1.0.0`–`v1.6.0` 全部 tag。
+- 已推送内容：`main` 与 `v1.0.0`–`v1.6.1` 全部 tag。
 
 ---
 

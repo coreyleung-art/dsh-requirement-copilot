@@ -54,26 +54,33 @@ npm view dsh-requirement-copilot dist.tarball
 - 发布后不可覆盖同版本，修 bug 需升版本；
 - 若发现严重问题：`npm deprecate dsh-requirement-copilot@<version> "reason"`，必要时 `npm unpublish`（24 小时内）。
 
-## 4. 建 GitHub 公开镜像（dshbase 必需）
+## 4. GitHub 公开镜像（dshbase 必需）
 
-dshbase 收录要求 **GitHub 仓库**；Gitee 私有仓库不能直接作为公开索引源。
+已创建公开仓库：<https://github.com/coreyleung-art/dsh-requirement-copilot>（默认分支 `main`，public）。
 
-1. 在 GitHub 账号 `coreyleung-art` 下创建公开仓库 `dsh-requirement-copilot`；
-2. 推送 `main` 与全部 tag；
-3. 仓库 description 用 `docs/MARKETPLACE_LISTING.md` 的英文短描述；
-4. Topics 至少包含：
+已加 topics：
 
 ```text
 dsh-plugin
 deepseek-harness
 prompt-engineering
+requirement
 requirements
+clarification
 specification
 ```
 
-5. 确认 `package.json` 的 repository/homepage 指向 GitHub（当前源码里是 Gitee，需要改或由镜像覆盖）。
+`package.json` 的 repository/homepage/bugs 已指向 GitHub。由于本机网络无法直连 `github.com:443` 的 git 协议，镜像使用 GitHub Git Data API：
 
-> 截至本文，GitHub 镜像尚未创建；这是上架 dshbase 的硬前提。
+```bash
+GITHUB_TOKEN=... node scripts/mirror-github.mjs --tag
+```
+
+脚本只从环境变量读取 token，不写文件；会镜像 `main` 并按需创建 `v<version>` tag。能正常 `git push` 的环境可直接：
+
+```bash
+git push github main --tags
+```
 
 ## 5. 提交 dshbase
 
@@ -85,7 +92,7 @@ specification
 |---|---|
 | 插件名称 | `dsh-requirement-copilot` |
 | GitHub 仓库 | `https://github.com/coreyleung-art/dsh-requirement-copilot` |
-| npm 包名 | `dsh-requirement-copilot` |
+| npm 包名 | `dsh-requirement-copilot`（**待 npm 发布后提交**；未发布时 catalog 只能 browse-only） |
 | 功能描述 | 见 `docs/MARKETPLACE_LISTING.md` 的短描述 |
 | 分类 | Developer（开发）或 Productivity（效率） |
 | 需要外部账号/服务 | 否，开箱即用（使用 DSH 已配置的默认模型） |
@@ -143,8 +150,8 @@ dsh plugin add dsh-requirement-copilot
 - [x] 构建脚本与 staging 目录
 - [x] `npm pack` tarball（10 files，约 60 KB）
 - [x] 上架文案（`docs/MARKETPLACE_LISTING.md`）
+- [x] GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot`（public，`dsh-plugin` topic 已加）
 - [ ] npm 登录 / 发布（缺凭据）
-- [ ] GitHub 公开镜像与 `dsh-plugin` topic（需确认后创建）
-- [ ] dshbase issue 提交
+- [ ] dshbase issue 提交（等 npm 发布后填 npm 包名）
 - [ ] dsh-plugins.tech（站点入口未开放）
 - [ ] 真实模型质量基线（`evals/run-eval.mjs --live`，缺端点/额度）

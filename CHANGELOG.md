@@ -20,6 +20,18 @@
 
 - 暂无。
 
+## [1.6.1] - 2026-11-05
+
+### Added
+
+- GitHub 公开镜像 `coreyleung-art/dsh-requirement-copilot` 建立（public，默认分支 main），已加 `dsh-plugin`、`deepseek-harness` 等 topic。
+- 新增 `scripts/mirror-github.mjs`：网络无法直连 GitHub git 时，用 Git Data API 镜像 main（可选打 tag）。
+
+### Changed
+
+- 源码/包/bundle/client id/profile link 统一为 `dsh-requirement-copilot`；旧 `@local/requirement-copilot` profile 依赖已替换。
+- README/分发手册更新 GitHub 镜像与当前发布状态。
+
 ## [1.6.0] - 2026-11-05
 
 ### Changed
